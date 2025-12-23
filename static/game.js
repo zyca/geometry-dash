@@ -2,6 +2,7 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
 const scoreEl = document.getElementById('score');
+const highScoreEl = document.getElementById('highScore');
 const gameOverEl = document.getElementById('gameOver');
 const restartBtn = document.getElementById('restartBtn');
 
@@ -30,6 +31,7 @@ let groundHeight = 100;
 let player;
 let gameObjects; 
 let score;
+let highScore = 0;
 let frameCount;
 let isGameOver;
 let nextSpawnFrame;
@@ -209,6 +211,7 @@ class Player {
         this.onGround = false;
         this.angle = 0;
         this.coyoteCounter = 0;
+        this.waveTrail = [];
     }
 
     draw() {
@@ -216,118 +219,134 @@ class Player {
         ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
         
         if (gameMode === 'ufo') {
-            // --- DRAW UFO ---
+            // --- DRAW UFO (Default Style) ---
             ctx.rotate(this.angle);
             
-            // Dome
-            ctx.fillStyle = 'rgba(0, 255, 255, 0.6)';
+            // 1. Dome (Glass)
+            ctx.fillStyle = 'rgba(200, 240, 255, 0.8)'; // Semi-transparent glass
             ctx.beginPath();
-            ctx.arc(0, -10, 25, Math.PI, 0); 
+            ctx.arc(0, -5, 22, Math.PI, 0); 
             ctx.fill();
+            ctx.lineWidth = 3;
             ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 2;
             ctx.stroke();
-            
-            // Body
-            ctx.fillStyle = '#888';
-            ctx.beginPath();
-            ctx.ellipse(0, 5, 40, 15, 0, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.stroke();
-            
-            // Lights
-            ctx.fillStyle = '#ff0000';
-            for(let i=-2; i<=2; i++) {
-                ctx.beginPath();
-                ctx.arc(i * 15, 5, 3, 0, Math.PI * 2);
-                ctx.fill();
-            }
-            
+
+            // 2. Pilot (Mini Cube inside dome)
             ctx.save();
-            ctx.translate(0, -15);
-            ctx.scale(0.4, 0.4);
+            ctx.translate(0, -8);
+            ctx.scale(0.35, 0.35);
             this.drawCube();
             ctx.restore();
+            
+            // 3. Saucer Base
+            ctx.fillStyle = this.color; 
+            ctx.beginPath();
+            ctx.roundRect(-28, -5, 56, 18, 5); // Rounded rectangle base
+            ctx.fill();
+            ctx.stroke();
+            
+            // 4. Mechanical Detail (Band)
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+            ctx.beginPath();
+            ctx.rect(-28, 2, 56, 4);
+            ctx.fill();
+
+            // 5. Legs / Lights
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(-15, 18, 4, 0, Math.PI*2);
+            ctx.arc(15, 18, 4, 0, Math.PI*2);
+            ctx.fill();
+            ctx.stroke();
 
         } else if (gameMode === 'ship') {
-            // --- DRAW JET ---
+            // --- DRAW SHIP (Default Style) ---
             ctx.rotate(this.angle);
             
+            // Thrust Flame
             if (isHoldingJump) {
-                ctx.fillStyle = '#ffaa00';
+                ctx.fillStyle = '#FF4500'; // Orange/Red
                 ctx.beginPath();
-                ctx.moveTo(-40, 5);
-                ctx.lineTo(-60, 0);
-                ctx.lineTo(-40, -5);
+                ctx.moveTo(-35, 5);
+                ctx.lineTo(-55, 10);
+                ctx.lineTo(-65, 0);
+                ctx.lineTo(-55, -10);
+                ctx.lineTo(-35, -5);
                 ctx.fill();
             }
 
-            ctx.fillStyle = '#555'; 
-            ctx.beginPath();
-            ctx.moveTo(-40, 10);
-            ctx.lineTo(20, 10);
-            ctx.lineTo(60, 0); 
-            ctx.lineTo(20, -10);
-            ctx.lineTo(-40, -10);
-            ctx.lineTo(-30, 0); 
-            ctx.closePath();
-            ctx.fill();
+            // Main Body (Curve)
+            ctx.fillStyle = this.color; 
             ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 2;
-            ctx.stroke();
-            
-            ctx.fillStyle = '#777';
-            ctx.beginPath();
-            ctx.moveTo(-20, 5);
-            ctx.lineTo(-40, 30); 
-            ctx.lineTo(10, 5);
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
+            ctx.lineWidth = 3;
             
             ctx.beginPath();
-            ctx.moveTo(-35, -10);
-            ctx.lineTo(-45, -35); 
-            ctx.lineTo(-15, -10);
-            ctx.closePath();
+            ctx.moveTo(35, 0); // Nose
+            ctx.quadraticCurveTo(10, 25, -35, 12); // Bottom curve
+            ctx.lineTo(-35, -12); // Back
+            ctx.quadraticCurveTo(10, -25, 35, 0); // Top curve
             ctx.fill();
             ctx.stroke();
 
-            ctx.fillStyle = 'rgba(0, 255, 255, 0.5)'; 
+            // Cockpit Window (Darker/Glass)
+            ctx.fillStyle = '#222'; 
             ctx.beginPath();
-            ctx.ellipse(0, -12, 20, 12, 0, Math.PI, 0); 
+            ctx.ellipse(8, -5, 14, 10, 0.2, 0, Math.PI*2);
             ctx.fill();
             ctx.stroke();
-            
+
+            // Pilot (Mini Cube) - Sitting in the "seat"
             ctx.save();
-            ctx.translate(0, -12); 
-            ctx.scale(0.3, 0.3); 
+            ctx.translate(-5, -5); 
+            ctx.scale(0.35, 0.35); 
             this.drawCube();
             ctx.restore();
             
         } else if (gameMode === 'wave') {
-            // --- DRAW WAVE (Dart) ---
+            // --- DRAW WAVE (Default Style) ---
+            
+            // Draw Trail (World Coordinates)
+            if (this.waveTrail.length > 1) {
+                ctx.restore(); // Pop the player translation
+                
+                ctx.save();
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+                ctx.lineWidth = 8;
+                ctx.lineJoin = 'round';
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(this.waveTrail[0].x, this.waveTrail[0].y);
+                for (let i = 1; i < this.waveTrail.length; i++) {
+                    ctx.lineTo(this.waveTrail[i].x, this.waveTrail[i].y);
+                }
+                ctx.stroke();
+                ctx.restore();
+
+                ctx.save(); // Push back for player rotation
+                ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
+            }
+
             ctx.rotate(this.angle);
             
+            // Main Arrow Shape
             ctx.fillStyle = this.color;
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 3;
+            
             ctx.beginPath();
-            ctx.moveTo(-20, -15);
-            ctx.lineTo(20, 0);
-            ctx.lineTo(-20, 15);
+            ctx.moveTo(25, 0);   // Tip
+            ctx.lineTo(-15, 15); // Bottom back
+            ctx.lineTo(-15, -15); // Top back
             ctx.closePath();
             ctx.fill();
-            
-            ctx.lineWidth = 3;
-            ctx.strokeStyle = '#fff';
             ctx.stroke();
             
-            // Inner detail
-            ctx.fillStyle = '#000';
+            // Inner Detail (White Triangle)
+            ctx.fillStyle = '#fff';
             ctx.beginPath();
-            ctx.moveTo(-10, -5);
-            ctx.lineTo(0, 0);
-            ctx.lineTo(-10, 5);
-            ctx.closePath();
+            ctx.moveTo(10, 0);
+            ctx.lineTo(-5, 6);
+            ctx.lineTo(-5, -6);
             ctx.fill();
 
         } else {
@@ -404,7 +423,7 @@ class Player {
         } else if (gameMode === 'ship') {
             // --- SHIP PHYSICS ---
             const SHIP_GRAVITY = 0.6;
-            const SHIP_THRUST = 1.0;
+            const SHIP_THRUST = 0.85;
             const MAX_SHIP_VELOCITY = 12;
 
             if (isHoldingJump) {
@@ -458,15 +477,24 @@ class Player {
 
             this.y += this.velocityY;
 
-            // Generate tail particles
-            if (frameCount % 2 === 0) {
-                 const p = new Particle(this.x, this.y + this.height/2, '#ffffff');
-                 p.speedX = -OBSTACLE_SPEED; 
-                 p.speedY = 0;
-                 p.life = 1.0;
-                 p.decay = 0.015;
-                 particles.push(p);
+            // Wave Trail Logic
+            for (let i = this.waveTrail.length - 1; i >= 0; i--) {
+                this.waveTrail[i].x -= OBSTACLE_SPEED;
+                if (this.waveTrail[i].x < 0) {
+                    this.waveTrail.splice(i, 1);
+                }
             }
+
+            const cx = this.x + this.width / 2;
+            const cy = this.y + this.height / 2;
+            const cos = Math.cos(this.angle);
+            const sin = Math.sin(this.angle);
+            
+            // Calculate back of the wave (-20, 0) rotated
+            const tailX = cx + (-20 * cos - 0 * sin);
+            const tailY = cy + (-20 * sin + 0 * cos);
+            
+            this.waveTrail.push({x: tailX, y: tailY});
         }
 
         this.onGround = false; 
@@ -741,6 +769,8 @@ function init() {
         bgParticles.push(new BgParticle());
     }
 
+    highScore = parseInt(localStorage.getItem('highScore')) || 0;
+    highScoreEl.textContent = `Best: ${highScore}`;
     scoreEl.textContent = 'Score: 0';
     gameOverEl.classList.add('hidden');
     
@@ -814,11 +844,14 @@ function spawnObject() {
         else type = 'pillar'; 
     }
 
+    let delay = 0;
+
     if (type === 'pillar') {
         const x = canvas.width;
         const height = Math.random() * 60 + 40;
         gameObjects.push(new Pillar(x, floorY - height, 30, height, '#ff0000'));
         consecutivePlatforms = 0;
+        delay = Math.floor(Math.random() * 30) + 25;
     } else if (type === 'spike') {
         const rCount = Math.random();
         const count = rCount < 0.6 ? 3 : (rCount < 0.85 ? 2 : 1); 
@@ -834,6 +867,8 @@ function spawnObject() {
              gameObjects.push(new Obstacle(x, y, OBSTACLE_WIDTH, OBSTACLE_HEIGHT, OBSTACLE_COLOR));
         }
         consecutivePlatforms = 0; 
+        // Increase delay based on spike count to prevent platforms spawning on top (headroom issue)
+        delay = Math.floor(Math.random() * 20) + 30 + (count * 12);
     } else {
         const width = Math.floor(Math.random() * (PLATFORM_WIDTH_MAX - PLATFORM_WIDTH_MIN)) + PLATFORM_WIDTH_MIN;
         let yPos;
@@ -863,14 +898,9 @@ function spawnObject() {
              const spikeY = yPos - OBSTACLE_HEIGHT;
              gameObjects.push(new Obstacle(spikeX, spikeY, OBSTACLE_WIDTH, OBSTACLE_HEIGHT, OBSTACLE_COLOR));
         }
-    }
-
-    let delay = 0;
-    if (type === 'platform') {
-        delay = Math.floor(Math.random() * 30) + 25; 
-    } else {
         delay = Math.floor(Math.random() * 30) + 25;
     }
+
     nextSpawnFrame = frameCount + delay;
 }
 
@@ -972,6 +1002,11 @@ function updateGame() {
         if (!obj.passed && obj.x + obj.width < player.x) {
             score++;
             scoreEl.textContent = `Score: ${score}`;
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('highScore', highScore);
+                highScoreEl.textContent = `Best: ${highScore}`;
+            }
             obj.passed = true;
         }
 

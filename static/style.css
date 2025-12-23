@@ -42,6 +42,18 @@ h1 {
     pointer-events: none;
 }
 
+#highScore {
+    position: absolute;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 1.5em;
+    color: #ffd700;
+    text-shadow: 0 0 10px #ffd700;
+    z-index: 10;
+    pointer-events: none;
+}
+
 #gameOver {
     position: absolute;
     top: 50%;
