@@ -1,0 +1,191 @@
+ * Serving Flask app 'app'
+ * Debug mode: on
+[31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on http://127.0.0.1:5000
+[33mPress CTRL+C to quit[0m
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 132-428-064
+127.0.0.1 - - [22/Dec/2025 16:21:56] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [22/Dec/2025 16:21:56] "[33mGET /static/music.mp3 HTTP/1.1[0m" 404 -
+127.0.0.1 - - [22/Dec/2025 16:21:56] "[36mGET /static/style.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [22/Dec/2025 16:21:56] "GET /static/game.js HTTP/1.1" 200 -
+127.0.0.1 - - [22/Dec/2025 16:21:56] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+127.0.0.1 - - [22/Dec/2025 16:22:08] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+127.0.0.1 - - [22/Dec/2025 16:22:34] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [22/Dec/2025 16:22:34] "[36mGET /static/style.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [22/Dec/2025 16:22:34] "[33mGET /static/music.mp3 HTTP/1.1[0m" 404 -
+127.0.0.1 - - [22/Dec/2025 16:22:34] "[36mGET /static/game.js HTTP/1.1[0m" 304 -
+127.0.0.1 - - [22/Dec/2025 16:22:35] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+127.0.0.1 - - [22/Dec/2025 16:24:28] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [22/Dec/2025 16:24:28] "[36mGET /static/style.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [22/Dec/2025 16:24:28] "[33mGET /static/music.mp3 HTTP/1.1[0m" 404 -
+127.0.0.1 - - [22/Dec/2025 16:24:28] "[36mGET /static/game.js HTTP/1.1[0m" 304 -
+127.0.0.1 - - [22/Dec/2025 16:24:28] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+127.0.0.1 - - [22/Dec/2025 16:26:37] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [22/Dec/2025 16:26:37] "[33mGET /static/music.mp3 HTTP/1.1[0m" 404 -
+127.0.0.1 - - [22/Dec/2025 16:26:37] "[36mGET /static/style.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [22/Dec/2025 16:26:37] "GET /static/game.js HTTP/1.1" 200 -
+127.0.0.1 - - [22/Dec/2025 16:26:39] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+127.0.0.1 - - [22/Dec/2025 16:33:30] "[35m[1mGET / HTTP/1.1[0m" 500 -
+Traceback (most recent call last):
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/app.py", line 1536, in __call__
+    return self.wsgi_app(environ, start_response)
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/app.py", line 1514, in wsgi_app
+    response = self.handle_exception(e)
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "/Users/ethanzhang/Documents/Coding/geometry_dash_clone/app.py", line 7, in index
+    return render_template('index.html')
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/templating.py", line 149, in render_template
+    template = app.jinja_env.get_or_select_template(template_name_or_list)
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/jinja2/environment.py", line 1087, in get_or_select_template
+    return self.get_template(template_name_or_list, parent, globals)
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/jinja2/environment.py", line 1016, in get_template
+    return self._load_template(name, globals)
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/jinja2/environment.py", line 975, in _load_template
+    template = self.loader.load(self, name, self.make_globals(globals))
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/jinja2/loaders.py", line 126, in load
+    source, filename, uptodate = self.get_source(environment, name)
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/templating.py", line 65, in get_source
+    return self._get_source_fast(environment, template)
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/templating.py", line 99, in _get_source_fast
+    raise TemplateNotFound(template)
+jinja2.exceptions.TemplateNotFound: index.html
+127.0.0.1 - - [22/Dec/2025 16:33:30] "GET /?__debugger__=yes&cmd=resource&f=style.css HTTP/1.1" 200 -
+127.0.0.1 - - [22/Dec/2025 16:33:30] "GET /?__debugger__=yes&cmd=resource&f=debugger.js HTTP/1.1" 200 -
+127.0.0.1 - - [22/Dec/2025 16:33:30] "GET /?__debugger__=yes&cmd=resource&f=console.png&s=Xyx4AiRjoAssnrAZPQiR HTTP/1.1" 200 -
+127.0.0.1 - - [22/Dec/2025 16:33:30] "GET /?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1" 200 -
+127.0.0.1 - - [22/Dec/2025 16:33:34] "[35m[1mGET / HTTP/1.1[0m" 500 -
+Traceback (most recent call last):
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/app.py", line 1536, in __call__
+    return self.wsgi_app(environ, start_response)
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/app.py", line 1514, in wsgi_app
+    response = self.handle_exception(e)
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "/Users/ethanzhang/Documents/Coding/geometry_dash_clone/app.py", line 7, in index
+    return render_template('index.html')
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/templating.py", line 149, in render_template
+    template = app.jinja_env.get_or_select_template(template_name_or_list)
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/jinja2/environment.py", line 1087, in get_or_select_template
+    return self.get_template(template_name_or_list, parent, globals)
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/jinja2/environment.py", line 1016, in get_template
+    return self._load_template(name, globals)
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/jinja2/environment.py", line 975, in _load_template
+    template = self.loader.load(self, name, self.make_globals(globals))
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/jinja2/loaders.py", line 126, in load
+    source, filename, uptodate = self.get_source(environment, name)
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/templating.py", line 65, in get_source
+    return self._get_source_fast(environment, template)
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/templating.py", line 99, in _get_source_fast
+    raise TemplateNotFound(template)
+jinja2.exceptions.TemplateNotFound: index.html
+127.0.0.1 - - [22/Dec/2025 16:33:34] "[36mGET /?__debugger__=yes&cmd=resource&f=style.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [22/Dec/2025 16:33:34] "[36mGET /?__debugger__=yes&cmd=resource&f=debugger.js HTTP/1.1[0m" 304 -
+127.0.0.1 - - [22/Dec/2025 16:33:34] "[36mGET /?__debugger__=yes&cmd=resource&f=console.png&s=Xyx4AiRjoAssnrAZPQiR HTTP/1.1[0m" 304 -
+127.0.0.1 - - [22/Dec/2025 16:33:34] "[36mGET /?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [22/Dec/2025 16:34:12] "[35m[1mGET / HTTP/1.1[0m" 500 -
+Traceback (most recent call last):
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/app.py", line 1536, in __call__
+    return self.wsgi_app(environ, start_response)
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/app.py", line 1514, in wsgi_app
+    response = self.handle_exception(e)
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "/Users/ethanzhang/Documents/Coding/geometry_dash_clone/app.py", line 7, in index
+    return render_template('index.html')
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/templating.py", line 149, in render_template
+    template = app.jinja_env.get_or_select_template(template_name_or_list)
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/jinja2/environment.py", line 1087, in get_or_select_template
+    return self.get_template(template_name_or_list, parent, globals)
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/jinja2/environment.py", line 1016, in get_template
+    return self._load_template(name, globals)
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/jinja2/environment.py", line 975, in _load_template
+    template = self.loader.load(self, name, self.make_globals(globals))
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/jinja2/loaders.py", line 126, in load
+    source, filename, uptodate = self.get_source(environment, name)
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/templating.py", line 65, in get_source
+    return self._get_source_fast(environment, template)
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/templating.py", line 99, in _get_source_fast
+    raise TemplateNotFound(template)
+jinja2.exceptions.TemplateNotFound: index.html
+127.0.0.1 - - [22/Dec/2025 16:34:12] "[36mGET /?__debugger__=yes&cmd=resource&f=style.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [22/Dec/2025 16:34:12] "[36mGET /?__debugger__=yes&cmd=resource&f=debugger.js HTTP/1.1[0m" 304 -
+127.0.0.1 - - [22/Dec/2025 16:34:12] "[36mGET /?__debugger__=yes&cmd=resource&f=console.png&s=Xyx4AiRjoAssnrAZPQiR HTTP/1.1[0m" 304 -
+127.0.0.1 - - [22/Dec/2025 16:34:12] "[36mGET /?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [22/Dec/2025 16:36:37] "[35m[1mGET / HTTP/1.1[0m" 500 -
+Traceback (most recent call last):
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/app.py", line 1536, in __call__
+    return self.wsgi_app(environ, start_response)
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/app.py", line 1514, in wsgi_app
+    response = self.handle_exception(e)
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+  File "/Users/ethanzhang/Documents/Coding/geometry_dash_clone/app.py", line 7, in index
+    return render_template('index.html')
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/templating.py", line 149, in render_template
+    template = app.jinja_env.get_or_select_template(template_name_or_list)
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/jinja2/environment.py", line 1087, in get_or_select_template
+    return self.get_template(template_name_or_list, parent, globals)
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/jinja2/environment.py", line 1016, in get_template
+    return self._load_template(name, globals)
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/jinja2/environment.py", line 975, in _load_template
+    template = self.loader.load(self, name, self.make_globals(globals))
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/jinja2/loaders.py", line 126, in load
+    source, filename, uptodate = self.get_source(environment, name)
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/templating.py", line 65, in get_source
+    return self._get_source_fast(environment, template)
+  File "/Users/ethanzhang/Library/Python/3.9/lib/python/site-packages/flask/templating.py", line 99, in _get_source_fast
+    raise TemplateNotFound(template)
+jinja2.exceptions.TemplateNotFound: index.html
+127.0.0.1 - - [22/Dec/2025 16:36:37] "[36mGET /?__debugger__=yes&cmd=resource&f=style.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [22/Dec/2025 16:36:37] "[36mGET /?__debugger__=yes&cmd=resource&f=debugger.js HTTP/1.1[0m" 304 -
+127.0.0.1 - - [22/Dec/2025 16:36:37] "[36mGET /?__debugger__=yes&cmd=resource&f=console.png&s=Xyx4AiRjoAssnrAZPQiR HTTP/1.1[0m" 304 -
+127.0.0.1 - - [22/Dec/2025 16:36:37] "[36mGET /?__debugger__=yes&cmd=resource&f=console.png HTTP/1.1[0m" 304 -
+127.0.0.1 - - [22/Dec/2025 16:37:03] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [22/Dec/2025 16:37:03] "[36mGET /static/style.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [22/Dec/2025 16:37:03] "[33mGET /static/music.mp3 HTTP/1.1[0m" 404 -
+127.0.0.1 - - [22/Dec/2025 16:37:03] "GET /static/game.js HTTP/1.1" 200 -
+127.0.0.1 - - [22/Dec/2025 16:37:04] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+127.0.0.1 - - [22/Dec/2025 17:24:34] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [22/Dec/2025 17:24:35] "[33mGET /static/music.mp3 HTTP/1.1[0m" 404 -
+127.0.0.1 - - [22/Dec/2025 17:24:35] "[36mGET /static/style.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [22/Dec/2025 17:24:35] "GET /static/game.js HTTP/1.1" 200 -
+127.0.0.1 - - [22/Dec/2025 17:24:35] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [22/Dec/2025 17:24:35] "[36mGET /static/style.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [22/Dec/2025 17:24:35] "[33mGET /static/music.mp3 HTTP/1.1[0m" 404 -
+127.0.0.1 - - [22/Dec/2025 17:24:35] "[36mGET /static/game.js HTTP/1.1[0m" 304 -
+127.0.0.1 - - [22/Dec/2025 17:24:36] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+127.0.0.1 - - [22/Dec/2025 17:34:40] "GET / HTTP/1.1" 200 -
+127.0.0.1 - - [22/Dec/2025 17:34:40] "[36mGET /static/style.css HTTP/1.1[0m" 304 -
+127.0.0.1 - - [22/Dec/2025 17:34:40] "GET /static/game.js HTTP/1.1" 200 -
+127.0.0.1 - - [22/Dec/2025 17:34:40] "[33mGET /static/music.mp3 HTTP/1.1[0m" 404 -
+127.0.0.1 - - [22/Dec/2025 17:34:40] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+127.0.0.1 - - [22/Dec/2025 17:34:41] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
+127.0.0.1 - - [22/Dec/2025 17:34:47] "[33mGET /static/music.mp3 HTTP/1.1[0m" 404 -
+127.0.0.1 - - [22/Dec/2025 17:34:49] "[33mGET /favicon.ico HTTP/1.1[0m" 404 -
