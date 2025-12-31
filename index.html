@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Geometry Dash</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="static/style.css">
 </head>
 <body>
     <div id="errorDisplay" style="position: fixed; top: 0; left: 0; width: 100%; background: rgba(255,0,0,0.9); color: white; z-index: 20000; display: none; padding: 20px; font-family: monospace; word-break: break-all;"></div>
@@ -57,6 +57,6 @@
     <audio id="bgMusic" loop>
         <!-- Placeholder for music, browser might block autoplay without interaction -->
     </audio>
-    <script src="{{ url_for('static', filename='game.js') }}"></script>
+    <script src="static/game.js"></script>
 </body>
 </html>
