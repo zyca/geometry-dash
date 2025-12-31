@@ -1,108 +1,158 @@
 body {
-    background-color: #1a1a1a;
     margin: 0;
-    overflow: hidden; /* Prevent scrollbars */
+    overflow: hidden;
+    background: #111;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: white;
 }
 
-.container {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+#gameContainer {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
 }
 
 canvas {
-    display: block; /* Remove inline-block gap */
-    width: 100%;
-    height: 100%;
+    display: block;
 }
 
-h1 {
+#ui {
     position: absolute;
-    top: 10px;
-    left: 50%;
-    transform: translateX(-50%);
-    color: #00ffff;
-    text-shadow: 0 0 10px #00ffff;
-    z-index: 10;
-    margin: 0;
+    top: 20px;
+    left: 20px;
     pointer-events: none;
 }
 
 #score {
-    position: absolute;
-    top: 50px;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 1.5em;
-    color: #00ff00;
-    text-shadow: 0 0 10px #00ff00;
-    z-index: 10;
-    pointer-events: none;
+    font-size: 24px;
+    font-weight: bold;
+    text-shadow: 2px 2px 0 #000;
 }
 
 #highScore {
-    position: absolute;
-    top: 80px;
-    left: 50%;
-    transform: translateX(-50%);
-    font-size: 1.5em;
-    color: #ffd700;
-    text-shadow: 0 0 10px #ffd700;
-    z-index: 10;
-    pointer-events: none;
-}
-
-#gameOver {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(0, 0, 0, 0.9);
-    padding: 20px;
-    border: 2px solid #ff0000;
-    border-radius: 10px;
-    width: 200px;
-    z-index: 20;
-    text-align: center;
-}
-
-#gameOver h2 {
-    color: #ff0000;
-    text-shadow: 0 0 10px #ff0000;
-    margin-top: 0;
-}
-
-#restartBtn {
-    background-color: #00ffff;
-    color: #1a1a1a;
-    border: none;
-    padding: 10px 20px;
-    font-size: 1em;
-    border-radius: 5px;
-    cursor: pointer;
-    transition: background-color 0.3s, box-shadow 0.3s;
-}
-
-#restartBtn:hover {
-    background-color: #ffffff;
-    box-shadow: 0 0 15px #ffffff;
+    font-size: 18px;
+    color: #ccc;
+    text-shadow: 1px 1px 0 #000;
 }
 
 .hidden {
-    display: none;
+    display: none !important;
 }
 
-#musicInfo {
+#gameOver, #levelMenu, #levelComplete {
     position: fixed;
-    bottom: 20px;
-    right: 20px;
-    color: #ffffff;
-    font-family: 'Courier New', monospace;
-    font-size: 0.9em;
-    opacity: 0.7;
-    text-shadow: 0 0 5px #00ffff;
-    pointer-events: none;
-    z-index: 10;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    text-align: center;
+    background: #000;
+    padding: 40px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
 }
+
+#levelMenu {
+    overflow-y: auto;
+    display: block; /* Allow normal flow for scrolling */
+}
+
+#levelMenu h1 {
+    margin-top: 50px;
+}
+
+h1 {
+    font-size: 48px;
+    margin: 0 0 20px 0;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #00ffff;
+    text-shadow: 0 0 10px #00ffff;
+}
+
+h2 {
+    color: #aaa;
+    margin-bottom: 30px;
+}
+
+button {
+    background: linear-gradient(to bottom, #00ffff, #008888);
+    border: none;
+    padding: 15px 30px;
+    font-size: 20px;
+    color: white;
+    font-weight: bold;
+    border-radius: 8px;
+    cursor: pointer;
+    text-transform: uppercase;
+    margin: 10px;
+    transition: transform 0.1s, box-shadow 0.1s;
+    box-shadow: 0 4px 0 #005555;
+}
+
+button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 0 #005555;
+    filter: brightness(1.1);
+}
+
+button:active {
+    transform: translateY(2px);
+    box-shadow: 0 2px 0 #005555;
+}
+
+/* Level List Styles */
+#levelList {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 20px;
+}
+
+.level-card {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    padding: 20px;
+    width: 200px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+}
+
+.level-card:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.05);
+    border-color: #00ffff;
+    box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
+}
+
+.level-name {
+    font-size: 20px;
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: #fff;
+}
+
+.level-stars {
+    color: #ffd700; /* Gold */
+    font-size: 18px;
+    margin-bottom: 5px;
+}
+
+.level-difficulty {
+    font-size: 14px;
+    color: #ccc;
+    text-transform: uppercase;
+}
+
+/* Difficulty Colors */
+.diff-easy { color: #00ff00; }
+.diff-normal { color: #00ffff; }
+.diff-hard { color: #ffff00; }
+.diff-harder { color: #ff8800; }
+.diff-insane { color: #ff00ff; }

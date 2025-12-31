@@ -1,1125 +1,306 @@
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
+// GEOMETRY DASH CLONE - STABLE VERSION 4.1
+// ALL LEVELS RESTORED + NEW ORB TYPES + UNIQUE ART
+// FIXED: seededRandom hoisting and function ordering
 
-const scoreEl = document.getElementById('score');
-const highScoreEl = document.getElementById('highScore');
-const gameOverEl = document.getElementById('gameOver');
-const restartBtn = document.getElementById('restartBtn');
+// --- 1. GLOBAL EXPORTS & UTILS ---
+window.startLevel = function(index) {
+    if (typeof init === 'function') {
+        currentLevelIndex = index;
+        const menu = document.getElementById('levelMenu');
+        if (menu) menu.classList.add('hidden');
+        if (sm && typeof sm.generateMusic === 'function') sm.generateMusic();
+        isPaused = false;
+        init(index);
+    }
+};
 
-// --- Game Constants ---
-const PLAYER_WIDTH = 50; 
-const PLAYER_HEIGHT = 50; 
-const PLAYER_COLOR = '#00ffff';
-const PLAYER_JUMP_FORCE = 19.0; 
-const UFO_JUMP_FORCE = 15.0; 
-const GRAVITY = 1.2; 
-const ROTATION_SPEED = 0.1; 
+window.toggleFullscreen = function() {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+    else document.exitFullscreen();
+};
 
-const OBSTACLE_WIDTH = 40; 
-const OBSTACLE_HEIGHT = 60; 
-const OBSTACLE_COLOR = '#ff00ff';
-const OBSTACLE_SPEED = 8; 
+function seededRandom() { 
+    const a = 1664525, c = 1013904223, m = 4294967296; 
+    currentSeed = (a * currentSeed + c) % m; 
+    return currentSeed / m; 
+}
 
-const PLATFORM_HEIGHT = 30; 
-const PLATFORM_WIDTH_MIN = 150;
-const PLATFORM_WIDTH_MAX = 400;
-const PLATFORM_COLOR = '#8A2BE2';
+// --- 2. LEVELS CONFIGURATION ---
+const levels = window.LEVELS_DATA || [
+    { 
+        name: "Stereo Madness", stars: 1, difficulty: "Easy", seed: 1001, hue: 200, duration: 60, params: { gap: 1.6, complexity: 1 },
+        platformStyle: 'grid', modeSequence: ['cube', 'ship', 'ufo', 'wave', 'cube_upside_down']
+    },
+    { 
+        name: "Back on Track", stars: 3, difficulty: "Normal", seed: 2002, hue: 280, duration: 60, params: { gap: 1.3, complexity: 2 },
+        platformStyle: 'bricks', modeSequence: ['ship', 'ufo', 'cube', 'wave', 'cube_upside_down']
+    },
+    { 
+        name: "Polargeist", stars: 5, difficulty: "Hard", seed: 3003, hue: 120, duration: 60, params: { gap: 1.1, complexity: 3 },
+        platformStyle: 'glow', modeSequence: ['cube', 'wave', 'ufo', 'ship', 'cube_upside_down']
+    },
+    { 
+        name: "Dry Out", stars: 7, difficulty: "Harder", seed: 4004, hue: 30, duration: 60, params: { gap: 0.9, complexity: 4 },
+        platformStyle: 'metal', modeSequence: ['wave', 'ship', 'cube', 'ufo', 'cube_upside_down']
+    },
+    { 
+        name: "Base After Base", stars: 10, difficulty: "Insane", seed: 5005, hue: 0, duration: 60, params: { gap: 0.8, complexity: 5 },
+        platformStyle: 'checkered', modeSequence: ['ufo', 'cube', 'ship', 'wave', 'cube_upside_down']
+    }
+];
 
+// --- 3. CONSTANTS ---
+let canvas, ctx;
+const PLAYER_WIDTH = 50, PLAYER_HEIGHT = 50, PLAYER_COLOR = '#00ffff';
+const PLAYER_JUMP_FORCE = 16.0, UFO_JUMP_FORCE = 16.0, GRAVITY = 1.1, ROTATION_SPEED = 0.108; 
+const OBSTACLE_WIDTH = 40, OBSTACLE_HEIGHT = 60, OBSTACLE_COLOR = '#ff00ff', OBSTACLE_SPEED = 8; 
+const PLATFORM_HEIGHT = 15, PLATFORM_WIDTH_MIN = 60, PLATFORM_WIDTH_MAX = 120;
+const JUMP_BUFFER_TIME = 15, COYOTE_TIME = 15;
 let groundHeight = 100; 
 
-// --- Game State ---
-let player;
-let gameObjects; 
-let score;
-let highScore = 0;
-let frameCount;
-let isGameOver;
-let nextSpawnFrame;
-let bgOffset = 0; 
-let consecutivePlatforms = 0; 
-let bgHue = 0; 
-let lastPlatformY = 0;
-let particles = [];
-let bgParticles = [];
+// --- 4. STATE ---
+let player, gameObjects = [], score = 0, highScore = 0, gameTime = 0; 
+let isGameOver = false, isLevelComplete = false, isPaused = true, nextSpawnTime = 0; 
+let bgOffset = 0, consecutivePlatforms = 0, bgHue = 0, lastPlatformY = 0;
+let particles = [], bgParticles = [], bgCubes = [], lastTime = 0, pointsSincePortal = 0;
+let isWaitingForPortal = false, isUpsideDown = false, isLevelEnding = false, orbsSpawnedCount = 0, animationFrameId = null;
+let currentLevelIndex = 0, currentSeed = 1;
+let jumpPressed = false, isHoldingJump = false, jumpBufferCounter = 0;
+let gameMode = 'cube';
 
-// --- Sound Manager ---
+// --- 5. SOUND MANAGER ---
 class SoundManager {
-    constructor() {
-        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-        this.isPlayingMusic = false;
-        this.nextNoteTime = 0;
-        this.tempo = 120;
-        this.noteIndex = 0;
-        this.bassLine = [110, 110, 220, 110, 165, 110, 220, 165]; 
+    constructor() { 
+        this.ctx = null; this.isPlaying = false; this.nextTime = 0; this.step = 0;
+        this.melody = [];
+        this.bass = [];
+        this.generateMusic();
     }
-
-    resume() {
-        if (this.ctx.state === 'suspended') {
-            this.ctx.resume();
-        }
+    init() { if (!this.ctx) { try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {} } }
+    generateMusic() {
+        const scale = [261.63, 311.13, 349.23, 392.00, 466.16, 523.25, 622.25, 698.46]; // C Minor Pentatonic
+        const bassScale = [65.41, 98.00, 130.81]; // C2, G2, C3
+        this.melody = new Array(64).fill(0).map(() => Math.random() > 0.4 ? scale[Math.floor(Math.random() * scale.length)] : 0);
+        this.bass = new Array(64).fill(0).map((_, i) => (i % 4 === 0 || Math.random() > 0.7) ? bassScale[Math.floor(Math.random() * bassScale.length)] : 0);
     }
-    
-    startMusic() {
-        this.resume();
-        if (this.isPlayingMusic) return;
-        this.isPlayingMusic = true;
-        this.nextNoteTime = this.ctx.currentTime;
-        this.scheduleMusic();
+    resume() { this.init(); if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume(); }
+    start() { this.resume(); if (this.isPlaying || !this.ctx) return; this.isPlaying = true; this.nextTime = this.ctx.currentTime; this.loop(); }
+    stop() { this.isPlaying = false; }
+    loop() { 
+        if (!this.isPlaying || !this.ctx) return; 
+        while (this.nextTime < this.ctx.currentTime + 0.1) { this.runSequence(this.nextTime); this.nextTime += 0.125; } 
+        setTimeout(() => this.loop(), 25); 
     }
-
-    stopMusic() {
-        this.isPlayingMusic = false;
+    runSequence(t) {
+        if (!this.ctx) return; const s = this.step % 64;
+        if(this.melody[s]){ const o=this.ctx.createOscillator(), g=this.ctx.createGain(); o.type='square'; o.frequency.value=this.melody[s]; g.gain.setValueAtTime(0.03,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.1); o.connect(g); g.connect(this.ctx.destination); o.start(t); o.stop(t+0.1); }
+        if(this.bass[s]){ const o=this.ctx.createOscillator(), g=this.ctx.createGain(); o.type='triangle'; o.frequency.value=this.bass[s]; g.gain.setValueAtTime(0.08,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.1); o.connect(g); g.connect(this.ctx.destination); o.start(t); o.stop(t+0.1); }
+        this.step++;
     }
-
-    scheduleMusic() {
-        if (!this.isPlayingMusic) return;
-        while (this.nextNoteTime < this.ctx.currentTime + 0.1) {
-            this.playNote(this.nextNoteTime);
-            const secondsPerBeat = 60.0 / this.tempo;
-            this.nextNoteTime += secondsPerBeat / 2; 
-            this.noteIndex = (this.noteIndex + 1) % this.bassLine.length;
-        }
-        setTimeout(() => this.scheduleMusic(), 25);
-    }
-
-    playNote(time) {
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.frequency.value = this.bassLine[this.noteIndex];
-        osc.type = 'triangle';
-        gain.gain.setValueAtTime(0.1, time);
-        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.1);
-        osc.connect(gain);
-        gain.connect(this.ctx.destination);
-        osc.start(time);
-        osc.stop(time + 0.1);
-    }
-
-    playJump() {
-        this.resume();
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(150, this.ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(600, this.ctx.currentTime + 0.1);
-        gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
-        osc.connect(gain);
-        gain.connect(this.ctx.destination);
-        osc.start();
-        osc.stop(this.ctx.currentTime + 0.1);
-    }
-
-    playDeath() {
-        this.resume();
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(800, this.ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(50, this.ctx.currentTime + 0.3);
-        gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
-        osc.connect(gain);
-        gain.connect(this.ctx.destination);
-        osc.start();
-        osc.stop(this.ctx.currentTime + 0.3);
-    }
-    
-    playPortal() {
-        this.resume();
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(400, this.ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(1200, this.ctx.currentTime + 0.2);
-        gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
-        osc.connect(gain);
-        gain.connect(this.ctx.destination);
-        osc.start();
-        osc.stop(this.ctx.currentTime + 0.2);
-    }
+    play(f1, f2, type = 'square') { this.resume(); if (!this.ctx) return; const o = this.ctx.createOscillator(), g = this.ctx.createGain(); o.type = type; o.frequency.setValueAtTime(f1, this.ctx.currentTime); o.frequency.exponentialRampToValueAtTime(f2, this.ctx.currentTime + 0.1); g.gain.setValueAtTime(0.1, this.ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.1); o.connect(g); g.connect(this.ctx.destination); o.start(); o.stop(this.ctx.currentTime + 0.1); }
 }
+const sm = new SoundManager();
 
-const soundManager = new SoundManager();
-
-class Particle {
-    constructor(x, y, color) {
-        this.x = x;
-        this.y = y;
-        this.color = color;
-        this.size = Math.random() * 8 + 4; 
-        this.speedX = Math.random() * -5 - 2; 
-        this.speedY = Math.random() * 4 - 2;
-        this.life = 1.0;
-        this.decay = 0.05;
-    }
-    update() {
-        this.x += this.speedX;
-        this.y += this.speedY;
-        this.life -= this.decay;
-        this.size *= 0.95;
-    }
-    draw() {
-        ctx.globalAlpha = this.life;
-        ctx.fillStyle = this.color;
-        ctx.fillRect(this.x, this.y, this.size, this.size);
-        ctx.globalAlpha = 1.0;
-    }
+// --- 6. ENTITY CLASSES ---
+class Particle { constructor(x,y,color){this.x=x;this.y=y;this.color=color;this.size=Math.random()*8+4;this.vx=Math.random()*10-5;this.vy=Math.random()*10-5;this.life=1.0;} update(dt){this.x+=this.vx*dt;this.y+=this.vy*dt;this.life-=0.05*dt;this.size=Math.max(0,this.size-0.2);} draw(){ctx.globalAlpha=Math.max(0,this.life);ctx.fillStyle=this.color;ctx.fillRect(this.x,this.y,this.size,this.size);ctx.globalAlpha=1.0;} }
+class BgCube { constructor(init){this.size=Math.random()*80+40;this.x=init?Math.random()*canvas.width:canvas.width+this.size;this.y=Math.random()*(canvas.height-groundHeight-100);this.alpha=Math.random()*0.1+0.05;this.v=(this.size/100)*0.5;} update(dt){this.x-=this.v*dt;if(this.x<-this.size){this.x=canvas.width+this.size;this.y=Math.random()*(canvas.height-groundHeight-100);}} draw(){ctx.fillStyle=`hsla(${bgHue},100%,50%,${this.alpha})`;ctx.fillRect(this.x,this.y,this.size,this.size);} }
+class JumpPad { constructor(x,y){this.x=x;this.y=y;this.width=40;this.height=10;this.type='pad';} draw(){ctx.fillStyle='#FFFF00';ctx.fillRect(this.x,this.y,this.width,this.height);ctx.strokeStyle='#fff';ctx.strokeRect(this.x,this.y,this.width,this.height);} update(dt){this.x-=OBSTACLE_SPEED*dt;} }
+class Orb { 
+    constructor(x,y,type='yellow'){this.x=x;this.y=y;this.width=40;this.height=40;this.type='orb';this.orbType=type;this.pulse=0;this.used=false;
+        this.color=type==='red'?'#ff0000':(type==='blue'?'#00ffff':'#ffd700');
+    } 
+    draw(){
+        ctx.save(); ctx.translate(this.x+20,this.y+20); this.pulse+=0.1; const s=1+Math.sin(this.pulse)*0.1; ctx.scale(s,s);
+        ctx.shadowBlur=15; ctx.shadowColor=this.color; ctx.strokeStyle=this.color; ctx.lineWidth=4; ctx.beginPath(); ctx.arc(0,0,20,0,Math.PI*2); ctx.stroke();
+        ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,0,12,0,Math.PI*2); ctx.stroke();
+        if(this.used){ctx.fillStyle=this.color;ctx.globalAlpha=0.3;ctx.fill();ctx.globalAlpha=1.0;} ctx.restore();
+    } 
+    update(dt){this.x-=OBSTACLE_SPEED*dt;} 
 }
-
-class BgParticle {
-    constructor() {
-        this.x = Math.random() * canvas.width;
-        this.y = Math.random() * (canvas.height - groundHeight); 
-        this.size = Math.random() * 3;
-        this.speedX = Math.random() * -0.5 - 0.1;
-    }
-    update() {
-        this.x += this.speedX;
-        if (this.x < 0) {
-            this.x = canvas.width;
-            this.y = Math.random() * (canvas.height - groundHeight);
-        }
-    }
-    draw() {
-        ctx.fillStyle = '#ffffff';
-        ctx.globalAlpha = 0.3;
-        ctx.fillRect(this.x, this.y, this.size, this.size);
-        ctx.globalAlpha = 1.0;
-    }
+class Obstacle { constructor(x,y,w,h,flipped=false){this.x=x;this.y=y;this.width=w;this.height=h;this.type='spike';this.flipped=flipped;} draw(){ctx.save();ctx.fillStyle=`hsl(${bgHue},60%,15%)`;ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();if(this.flipped){ctx.moveTo(this.x,this.y);ctx.lineTo(this.x+this.width/2,this.y+this.height);ctx.lineTo(this.x+this.width,this.y);}else{ctx.moveTo(this.x,this.y+this.height);ctx.lineTo(this.x+this.width/2,this.y);ctx.lineTo(this.x+this.width,this.y+this.height);}ctx.closePath();ctx.fill();ctx.stroke();ctx.restore();} update(dt){this.x-=OBSTACLE_SPEED*dt;} }
+class Pillar { constructor(x,y,w,h){this.x=x;this.y=y;this.width=w;this.height=h;this.type='spike';} draw(){ctx.save();ctx.fillStyle=`hsl(${bgHue},60%,15%)`;ctx.fillRect(this.x,this.y,this.width,this.height);ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.strokeRect(this.x,this.y,this.width,this.height);ctx.restore(); } update(dt){this.x -= OBSTACLE_SPEED * dt; } }
+class Platform { 
+    constructor(x,y,w,h){this.x=x;this.y=y;this.width=w;this.height=h;this.type='platform';} 
+    draw(){
+        ctx.save(); ctx.fillStyle=`hsl(${bgHue},60%,15%)`; ctx.fillRect(this.x,this.y,this.width,this.height);
+        ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.strokeRect(this.x,this.y,this.width,this.height);
+        const style = levels[currentLevelIndex]?.platformStyle || 'grid';
+        if(style==='bricks'){ for(let i=20; i<this.width; i+=20) { ctx.beginPath(); ctx.moveTo(this.x+i,this.y); ctx.lineTo(this.x+i,this.y+this.height); ctx.stroke(); } }
+        else if(style==='metal'){ ctx.fillStyle='rgba(255,255,255,0.1)'; ctx.fillRect(this.x+5,this.y+5,this.width-10,5); }
+        else if(style==='checkered'){ for(let i=0; i<this.width; i+=20) { if((i/20)%2===0) { ctx.fillStyle='rgba(255,255,255,0.05)'; ctx.fillRect(this.x+i,this.y,20,this.height); } } }
+        ctx.restore(); 
+    } 
+    update(dt){this.x -= OBSTACLE_SPEED * dt; } 
 }
+class Portal { constructor(x, y, targetMode) { this.x = x; this.y = y; this.width = 50; this.height = 80; this.targetMode = targetMode; this.type = 'portal'; this.passed = false; this.rotation = 0; } draw() { ctx.save(); ctx.shadowBlur = 30; let color = '#00ff00'; if (this.targetMode === 'ship') color = '#ff00ff'; if (this.targetMode === 'ufo') color = '#ffaa00'; if (this.targetMode === 'wave') color = '#00ffff'; if (this.targetMode === 'cube_upside_down') color = '#FF8C00'; ctx.shadowColor = color; ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.translate(this.x + 25, this.y + 40); for(let i=0; i<3; i++) { ctx.beginPath(); ctx.rotate(this.rotation + (i * Math.PI / 3)); ctx.ellipse(0, 0, 25 - (i*5), 40 - (i*8), 0, 0, Math.PI * 2); ctx.stroke(); } ctx.fillStyle = `hsl(${bgHue}, 60%, 15%)`; ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); ctx.restore(); } update(dt) { this.x -= OBSTACLE_SPEED * dt; this.rotation += 0.1 * dt; } }
 
-// --- Input State ---
-let jumpPressed = false;
-let isHoldingJump = false; 
-let jumpBufferCounter = 0; 
-const JUMP_BUFFER_TIME = 15; 
-const COYOTE_TIME = 15; 
-
-let gameMode = 'cube'; 
-
-// --- Player Class ---
 class Player {
-    constructor(x, y, width, height, color) {
-        this.x = x;
-        this.y = y;
-        this.width = width;
-        this.height = height;
-        this.color = color;
-        this.velocityY = 0;
-        this.onGround = false;
-        this.angle = 0;
-        this.coyoteCounter = 0;
-        this.waveTrail = [];
-    }
-
-    draw() {
-        ctx.save();
-        ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
-        
-        if (gameMode === 'ufo') {
-            // --- DRAW UFO (Default Style) ---
-            ctx.rotate(this.angle);
-            
-            // 1. Dome (Glass)
-            ctx.fillStyle = 'rgba(200, 240, 255, 0.8)'; // Semi-transparent glass
-            ctx.beginPath();
-            ctx.arc(0, -5, 22, Math.PI, 0); 
-            ctx.fill();
-            ctx.lineWidth = 3;
-            ctx.strokeStyle = '#fff';
-            ctx.stroke();
-
-            // 2. Pilot (Mini Cube inside dome)
-            ctx.save();
-            ctx.translate(0, -8);
-            ctx.scale(0.35, 0.35);
-            this.drawCube();
-            ctx.restore();
-            
-            // 3. Saucer Base
-            ctx.fillStyle = this.color; 
-            ctx.beginPath();
-            ctx.roundRect(-28, -5, 56, 18, 5); // Rounded rectangle base
-            ctx.fill();
-            ctx.stroke();
-            
-            // 4. Mechanical Detail (Band)
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-            ctx.beginPath();
-            ctx.rect(-28, 2, 56, 4);
-            ctx.fill();
-
-            // 5. Legs / Lights
-            ctx.fillStyle = '#fff';
-            ctx.beginPath();
-            ctx.arc(-15, 18, 4, 0, Math.PI*2);
-            ctx.arc(15, 18, 4, 0, Math.PI*2);
-            ctx.fill();
-            ctx.stroke();
-
-        } else if (gameMode === 'ship') {
-            // --- DRAW SHIP (Default Style) ---
-            ctx.rotate(this.angle);
-            
-            // Thrust Flame
-            if (isHoldingJump) {
-                ctx.fillStyle = '#FF4500'; // Orange/Red
-                ctx.beginPath();
-                ctx.moveTo(-35, 5);
-                ctx.lineTo(-55, 10);
-                ctx.lineTo(-65, 0);
-                ctx.lineTo(-55, -10);
-                ctx.lineTo(-35, -5);
-                ctx.fill();
-            }
-
-            // Main Body (Curve)
-            ctx.fillStyle = this.color; 
-            ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 3;
-            
-            ctx.beginPath();
-            ctx.moveTo(35, 0); // Nose
-            ctx.quadraticCurveTo(10, 25, -35, 12); // Bottom curve
-            ctx.lineTo(-35, -12); // Back
-            ctx.quadraticCurveTo(10, -25, 35, 0); // Top curve
-            ctx.fill();
-            ctx.stroke();
-
-            // Cockpit Window (Darker/Glass)
-            ctx.fillStyle = '#222'; 
-            ctx.beginPath();
-            ctx.ellipse(8, -5, 14, 10, 0.2, 0, Math.PI*2);
-            ctx.fill();
-            ctx.stroke();
-
-            // Pilot (Mini Cube) - Sitting in the "seat"
-            ctx.save();
-            ctx.translate(-5, -5); 
-            ctx.scale(0.35, 0.35); 
-            this.drawCube();
-            ctx.restore();
-            
-        } else if (gameMode === 'wave') {
-            // --- DRAW WAVE (Default Style) ---
-            
-            // Draw Trail (World Coordinates)
-            if (this.waveTrail.length > 1) {
-                ctx.restore(); // Pop the player translation
-                
-                ctx.save();
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-                ctx.lineWidth = 8;
-                ctx.lineJoin = 'round';
-                ctx.lineCap = 'round';
-                ctx.beginPath();
-                ctx.moveTo(this.waveTrail[0].x, this.waveTrail[0].y);
-                for (let i = 1; i < this.waveTrail.length; i++) {
-                    ctx.lineTo(this.waveTrail[i].x, this.waveTrail[i].y);
-                }
-                ctx.stroke();
-                ctx.restore();
-
-                ctx.save(); // Push back for player rotation
-                ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
-            }
-
-            ctx.rotate(this.angle);
-            
-            // Main Arrow Shape
-            ctx.fillStyle = this.color;
-            ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 3;
-            
-            ctx.beginPath();
-            ctx.moveTo(25, 0);   // Tip
-            ctx.lineTo(-15, 15); // Bottom back
-            ctx.lineTo(-15, -15); // Top back
-            ctx.closePath();
-            ctx.fill();
-            ctx.stroke();
-            
-            // Inner Detail (White Triangle)
-            ctx.fillStyle = '#fff';
-            ctx.beginPath();
-            ctx.moveTo(10, 0);
-            ctx.lineTo(-5, 6);
-            ctx.lineTo(-5, -6);
-            ctx.fill();
-
-        } else {
-            // --- DRAW CUBE ---
-            ctx.rotate(this.angle);
-            this.drawCube();
-        }
-
+    constructor(x,y,w,h,c){this.x=x;this.y=y;this.width=w;this.height=h;this.color=c;this.velocityY=0;this.onGround=false;this.angle=0;this.trail=[];}
+    draw(){
+        ctx.save(); ctx.translate(this.x+this.width/2,this.y+this.height/2);
+        if(gameMode==='ship'){
+            ctx.rotate(this.angle); ctx.fillStyle=this.color; ctx.beginPath(); ctx.ellipse(0,0,35,18,0,0,Math.PI*2); ctx.fill(); ctx.strokeStyle='#fff'; ctx.stroke();
+            ctx.save(); ctx.translate(0,-22); ctx.scale(0.35,0.35); this.drawCube(); ctx.restore();
+        } else if(gameMode==='wave'){
+            if(this.trail.length>1){ ctx.restore(); ctx.save(); ctx.strokeStyle='#fff'; ctx.lineWidth=4; ctx.beginPath(); ctx.moveTo(this.trail[0].x,this.trail[0].y); this.trail.forEach(t=>ctx.lineTo(t.x,t.y)); ctx.stroke(); ctx.restore(); ctx.save(); ctx.translate(this.x+this.width/2,this.y+this.height/2); }
+            ctx.rotate(this.angle); ctx.fillStyle=this.color; ctx.beginPath(); ctx.moveTo(25,0); ctx.lineTo(-15,15); ctx.lineTo(-15,-15); ctx.closePath(); ctx.fill(); ctx.strokeStyle='#fff'; ctx.stroke();
+        } else { ctx.rotate(this.angle); this.drawCube(); }
         ctx.restore();
     }
-
-    drawCube() {
-        ctx.shadowBlur = 30; 
-        ctx.shadowColor = this.color;
-
-        const grad = ctx.createLinearGradient(-this.width/2, -this.height/2, this.width/2, this.height/2);
-        grad.addColorStop(0, '#00ffff'); 
-        grad.addColorStop(1, '#008888'); 
-        ctx.fillStyle = grad;
-        
-        ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
-        
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 4;
-        ctx.strokeRect(-this.width / 2 + 3, -this.height / 2 + 3, this.width - 6, this.height - 6);
-        
-        ctx.fillStyle = '#000';
-        ctx.fillRect(-10, -8, 8, 8); 
-        ctx.fillRect(2, -8, 8, 8); 
-        
-        if (!this.onGround && gameMode === 'cube') {
-            ctx.beginPath();
-            ctx.arc(0, 6, 8, 0, Math.PI, false); 
-            ctx.fill();
-        } else {
-            ctx.beginPath();
-            ctx.arc(0, 14, 8, Math.PI, 0, false); 
-            ctx.fill();
+    drawCube(){ ctx.fillStyle=this.color; ctx.fillRect(-this.width/2,-this.height/2,this.width,this.height); ctx.strokeStyle='#fff'; ctx.lineWidth=4; ctx.strokeRect(-this.width/2+3,-this.height/2+3,this.width-6,this.height-6); }
+    update(dt){
+        const f = canvas.height-groundHeight;
+        if(gameMode==='cube'){ 
+            if(jumpPressed){ jumpBufferCounter=JUMP_BUFFER_TIME; jumpPressed=false; }
+            if(jumpBufferCounter>0) jumpBufferCounter-=dt;
+            this.velocityY+=GRAVITY*dt; if(jumpBufferCounter>0 && this.onGround){ this.jump(); jumpBufferCounter=0; } this.y+=this.velocityY*dt; if(!this.onGround) this.angle+=ROTATION_SPEED*dt; else this.angle=Math.round(this.angle/(Math.PI/2))*(Math.PI/2); 
         }
+        else if(gameMode==='ufo'){ this.velocityY+=GRAVITY*dt; if(jumpPressed){ this.velocityY=-UFO_JUMP_FORCE; jumpPressed=false; sm.play(150,600); } this.y+=this.velocityY*dt; this.angle=this.velocityY<0?-0.2:0.1; }
+        else if(gameMode==='ship'){ if(isHoldingJump) this.velocityY-=0.85*dt; else this.velocityY+=0.6*dt; this.velocityY=Math.max(-12,Math.min(12,this.velocityY)); this.y+=this.velocityY*dt; this.angle=this.velocityY*0.1; }
+        else if(gameMode==='wave'){ this.velocityY=isHoldingJump?-OBSTACLE_SPEED:OBSTACLE_SPEED; this.y+=this.velocityY*dt; this.trail.push({x:this.x+25, y:this.y+25}); if(this.trail.length>50) this.trail.shift(); }
+        this.onGround=false; if(this.y+this.height>f){ this.y=f-this.height; this.velocityY=0; this.onGround=true; if (gameMode === 'wave') this.angle = 0; }
+        if(this.y<0){ this.y=0; this.velocityY=0; }
     }
-
-    update() {
-        const floorY = canvas.height - groundHeight;
-
-        if (gameMode === 'cube') {
-            // --- CUBE PHYSICS ---
-            this.velocityY += GRAVITY;
-            
-            if (this.onGround) {
-                this.coyoteCounter = COYOTE_TIME;
-            } else {
-                this.coyoteCounter--;
-            }
-
-            // Perform Jump BEFORE position update to prevent ground snap
-            if (jumpBufferCounter > 0 && (this.onGround || this.coyoteCounter > 0)) {
-                this.performJump();
-                jumpBufferCounter = 0; 
-                this.coyoteCounter = 0; 
-            }
-
-            this.y += this.velocityY;
-
-            if (frameCount % 2 === 0) {
-                particles.push(new Particle(this.x, this.y + this.height/2, this.color));
-            }
-
-            if (!this.onGround) {
-                this.angle += ROTATION_SPEED;
-            } else {
-                const targetAngle = Math.round(this.angle / (Math.PI / 2)) * (Math.PI / 2);
-                this.angle = targetAngle;
-            }
-        } else if (gameMode === 'ship') {
-            // --- SHIP PHYSICS ---
-            const SHIP_GRAVITY = 0.6;
-            const SHIP_THRUST = 0.85;
-            const MAX_SHIP_VELOCITY = 12;
-
-            if (isHoldingJump) {
-                this.velocityY -= SHIP_THRUST;
-            } else {
-                this.velocityY += SHIP_GRAVITY;
-            }
-            
-            if (this.velocityY > MAX_SHIP_VELOCITY) this.velocityY = MAX_SHIP_VELOCITY;
-            if (this.velocityY < -MAX_SHIP_VELOCITY) this.velocityY = -MAX_SHIP_VELOCITY;
-
-            this.y += this.velocityY;
-            this.angle = this.velocityY * 0.1;
-            
-            if (isHoldingJump && frameCount % 3 === 0) {
-                 const p = new Particle(this.x, this.y + this.height/2, '#ffaa00');
-                 p.speedX = -5;
-                 particles.push(p);
-            }
-        } else if (gameMode === 'ufo') {
-            // --- UFO PHYSICS ---
-            this.velocityY += GRAVITY; 
-            
-            // Infinite Air Jump
-            if (jumpBufferCounter > 0) {
-                this.velocityY = -UFO_JUMP_FORCE; 
-                jumpBufferCounter = 0;
-                soundManager.playJump();
-                for(let i=0; i<5; i++) {
-                     const p = new Particle(this.x + this.width/2, this.y + this.height, '#fff');
-                     particles.push(p);
-                }
-            }
-            
-            this.y += this.velocityY;
-            
-            if (this.velocityY < 0) this.angle = -0.2;
-            else this.angle = 0.1;
-        } else if (gameMode === 'wave') {
-            // --- WAVE PHYSICS ---
-            // Constant vertical speed, 45 degree angle (velocity magnitude roughly equals horizontal speed)
-            const WAVE_SPEED = OBSTACLE_SPEED; 
-
-            if (isHoldingJump) {
-                this.velocityY = -WAVE_SPEED;
-                this.angle = -Math.PI / 4; // -45 degrees
-            } else {
-                this.velocityY = WAVE_SPEED;
-                this.angle = Math.PI / 4; // 45 degrees
-            }
-
-            this.y += this.velocityY;
-
-            // Wave Trail Logic
-            for (let i = this.waveTrail.length - 1; i >= 0; i--) {
-                this.waveTrail[i].x -= OBSTACLE_SPEED;
-                if (this.waveTrail[i].x < 0) {
-                    this.waveTrail.splice(i, 1);
-                }
-            }
-
-            const cx = this.x + this.width / 2;
-            const cy = this.y + this.height / 2;
-            const cos = Math.cos(this.angle);
-            const sin = Math.sin(this.angle);
-            
-            // Calculate back of the wave (-20, 0) rotated
-            const tailX = cx + (-20 * cos - 0 * sin);
-            const tailY = cy + (-20 * sin + 0 * cos);
-            
-            this.waveTrail.push({x: tailX, y: tailY});
-        }
-
-        this.onGround = false; 
-
-        // Ground Collision
-        if (this.y + this.height > floorY) {
-            this.y = floorY - this.height;
-            if (gameMode === 'cube') this.velocityY = 0;
-            else if (gameMode === 'wave') { /* die logic usually, but here clamp */ }
-            else this.velocityY = 0; 
-            this.onGround = true;
-        }
-        
-        // Ceiling Collision
-        if (this.y < 0) {
-            this.y = 0;
-            if (this.velocityY < 0) this.velocityY = 0;
-        }
-    }
-
-    performJump() {
-        this.velocityY = -PLAYER_JUMP_FORCE;
-        this.onGround = false;
-        soundManager.playJump();
-        for(let i=0; i<8; i++) {
-             const p = new Particle(this.x + this.width/2, this.y + this.height, '#fff');
-             p.speedY = Math.random() * -3; 
-             p.speedX = Math.random() * 4 - 2;
-             particles.push(p);
-        }
-    }
+    jump(force=-PLAYER_JUMP_FORCE){ this.velocityY=force; this.onGround=false; sm.play(150,600); }
 }
 
-// --- Portal Class ---
-class Portal {
-    constructor(x, y, targetMode) {
-        this.x = x;
-        this.y = y;
-        this.width = 50;
-        this.height = 80;
-        this.targetMode = targetMode; 
-        this.type = 'portal';
-        this.passed = false;
-        this.rotation = 0;
-    }
+// --- 7. LOGIC FUNCTIONS ---
+function resizeCanvas() { if(canvas){ canvas.width = window.innerWidth; canvas.height = window.innerHeight; groundHeight = canvas.height / 3; } }
+
+function init(idx){
+    resizeCanvas(); const floorY = canvas.height - groundHeight; player = new Player(100, floorY - 50, 50, 50, PLAYER_COLOR);
+    gameObjects=[]; particles=[]; bgCubes=[]; score=0; gameTime=0; lastTime=0; isGameOver=false; isLevelEnding=false; orbsSpawnedCount=0; nextSpawnTime=50; consecutivePlatforms=0; pointsSincePortal=0; isWaitingForPortal=false; isUpsideDown=false; gameMode='cube';
     
-    draw() {
-        ctx.save();
-        ctx.shadowBlur = 30;
-        let color = '#00ff00';
-        if (this.targetMode === 'ship') color = '#ff00ff'; 
-        if (this.targetMode === 'ufo') color = '#ffaa00'; 
-        if (this.targetMode === 'wave') color = '#00ffff'; // Cyan for wave
-        
-        ctx.shadowColor = color;
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 3;
-        
-        ctx.translate(this.x + this.width/2, this.y + this.height/2);
-        
-        for(let i=0; i<3; i++) {
-            ctx.beginPath();
-            ctx.rotate(this.rotation + (i * Math.PI / 3));
-            ctx.ellipse(0, 0, this.width/2 - (i*5), this.height/2 - (i*8), 0, 0, Math.PI * 2);
-            ctx.stroke();
+    // Reset Input State
+    jumpPressed = false; isHoldingJump = false; jumpBufferCounter = 0;
+
+    const l=levels[idx]; currentSeed=l.seed; bgHue=l.hue; for(let i=0; i<15; i++) bgCubes.push(new BgCube(true));
+    document.getElementById('score').textContent="Progress: 0%";
+    document.getElementById('gameOver').classList.add('hidden'); document.getElementById('levelComplete').classList.add('hidden');
+    sm.start(); 
+}
+
+function spawn(){
+    const f=canvas.height-groundHeight, l=levels[currentLevelIndex];
+    if (!l || !l.params) return;
+    const g = l.params.gap;
+    if(score>0 && Math.floor(score/10) > Math.floor(pointsSincePortal / 10)){
+        const target=l.modeSequence[Math.floor(score/10)%l.modeSequence.length];
+        if(target!==gameMode || target==='cube_upside_down'){
+            if(!isWaitingForPortal){ isWaitingForPortal=true; nextSpawnTime=gameTime+60; return; }
+            isWaitingForPortal=false; gameObjects.push(new Portal(canvas.width,f-80,target)); gameObjects.push(new Pillar(canvas.width+10,0,30,f-80));
+            pointsSincePortal=score; nextSpawnTime=gameTime+canvas.width/OBSTACLE_SPEED+60; return;
         }
-        
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.arc(0, 0, 10, 0, Math.PI * 2);
-        ctx.fill();
-        
-        ctx.restore();
     }
+    if(gameMode!=='cube'){
+        const r=seededRandom(); const x = canvas.width;
+        if(r<0.2) gameObjects.push(new Obstacle(x,f-60,40,60)); else if(r<0.4) gameObjects.push(new Obstacle(x,0,40,60,true)); else gameObjects.push(new Pillar(x,seededRandom()*(f-200)+100,50,50));
+        nextSpawnTime=gameTime+20*g; return;
+    }
+    const r=seededRandom(); let type='spike', delay=40;
+    if(r<0.3) type='spike'; else if(r<0.8) type='platform'; else if(r<0.92) type='orb'; else type='pad';
+    if(orbsSpawnedCount>=2 && type==='orb') type='spike';
     
-    update() {
-        this.x -= OBSTACLE_SPEED;
-        this.rotation += 0.1;
-        
-        if (Math.random() < 0.3) {
-            let color = '#00ff00';
-            if (this.targetMode === 'ship') color = '#ff00ff';
-            if (this.targetMode === 'ufo') color = '#ffaa00';
-            if (this.targetMode === 'wave') color = '#00ffff';
-            
-            const p = new Particle(
-                this.x + this.width/2 + (Math.random() * 20 - 10), 
-                this.y + this.height/2 + (Math.random() * 40 - 20), 
-                color
-            );
-            p.speedX = Math.random() * 2 - 1;
-            p.speedY = Math.random() * 2 - 1;
-            p.size = 3;
-            particles.push(p);
-        }
+    if(type==='pad'){ gameObjects.push(new JumpPad(canvas.width,f-10)); gameObjects.push(new Platform(canvas.width+200,f*0.5,200,f*0.5)); delay=100; }
+    else if(type==='orb'){ 
+        orbsSpawnedCount++; const x = canvas.width; const ot = (seededRandom()<0.1?'red':(seededRandom()<0.3?'blue':'yellow'));
+        gameObjects.push(new Orb(x,f-140,ot)); for(let i=0;i<5;i++) gameObjects.push(new Obstacle(x-60+i*40,f-60,40,60)); delay=100; 
     }
+    else if(type==='spike'){ gameObjects.push(new Obstacle(canvas.width,f-60,40,60)); delay=40; }
+    else { 
+        const w=seededRandom()*60+60; const y=consecutivePlatforms===0?f-20:lastPlatformY-(seededRandom()*20+35); lastPlatformY=Math.max(f*0.5,y); 
+        if(consecutivePlatforms > 0 && seededRandom() < 0.2) {
+            const gap = 400; const orbX = canvas.width + 54; gameObjects.push(new Orb(orbX, lastPlatformY + 50, 'yellow'));
+            for(let i=0; i<Math.ceil(gap/OBSTACLE_WIDTH); i++) gameObjects.push(new Obstacle((canvas.width-96)+(i*OBSTACLE_WIDTH), f-60, 40, 60));
+            gameObjects.push(new Platform(canvas.width + 244, lastPlatformY, w, f-lastPlatformY));
+            delay = (w + 244) / OBSTACLE_SPEED;
+        } else { gameObjects.push(new Platform(canvas.width, lastPlatformY, w, f-lastPlatformY)); delay = w/OBSTACLE_SPEED + 12; }
+        consecutivePlatforms = (consecutivePlatforms+1)%8;
+    }
+    nextSpawnTime=gameTime+delay*g;
 }
 
-// --- Obstacle Class ---
-class Obstacle {
-    constructor(x, y, width, height, color, flipped = false) {
-        this.x = x;
-        this.y = y;
-        this.width = width;
-        this.height = height;
-        this.color = color;
-        this.type = 'spike';
-        this.passed = false;
-        this.flipped = flipped;
-    }
-
-    draw() {
-        ctx.save();
-        ctx.shadowBlur = 20;
-        ctx.shadowColor = this.color;
-        
-        const grad = ctx.createLinearGradient(this.x, this.y, this.x, this.y + this.height);
-        grad.addColorStop(0, '#ff00ff');
-        grad.addColorStop(1, '#880088');
-        ctx.fillStyle = grad;
-        
-        ctx.beginPath();
-        if (this.flipped) {
-            ctx.moveTo(this.x, this.y);
-            ctx.lineTo(this.x + this.width / 2, this.y + this.height);
-            ctx.lineTo(this.x + this.width, this.y);
-        } else {
-            ctx.moveTo(this.x, this.y + this.height);
-            ctx.lineTo(this.x + this.width / 2, this.y);
-            ctx.lineTo(this.x + this.width, this.y + this.height);
-        }
-        ctx.closePath();
-        ctx.fill();
-        
-        ctx.restore();
-    }
-
-    update() {
-        this.x -= OBSTACLE_SPEED;
-    }
-}
-
-// --- Pillar Class ---
-class Pillar {
-    constructor(x, y, width, height, color) {
-        this.x = x;
-        this.y = y;
-        this.width = width;
-        this.height = height;
-        this.color = color;
-        this.type = 'spike'; 
-        this.passed = false;
-    }
-    
-    draw() {
-        ctx.save();
-        ctx.shadowBlur = 15;
-        ctx.shadowColor = this.color;
-        
-        ctx.fillStyle = '#444';
-        ctx.fillRect(this.x, this.y, this.width, this.height);
-        
-        ctx.strokeStyle = this.color;
-        ctx.lineWidth = 2;
-        ctx.strokeRect(this.x, this.y, this.width, this.height);
-        
-        ctx.strokeStyle = '#ffff00';
-        ctx.beginPath();
-        for(let i=0; i<this.height; i+=20) {
-            ctx.moveTo(this.x, this.y + i);
-            ctx.lineTo(this.x + this.width, this.y + i + 10);
-        }
-        ctx.stroke();
-        
-        ctx.restore();
-    }
-    
-    update() {
-        this.x -= OBSTACLE_SPEED;
-    }
-}
-
-// --- Platform Class ---
-class Platform {
-    constructor(x, y, width, height, color, moveType = 'none') {
-        this.x = x;
-        this.y = y;
-        this.initialY = y;
-        this.width = width;
-        this.height = height;
-        this.color = color;
-        this.type = 'platform';
-        this.passed = false;
-        
-        this.moveType = moveType; // 'none', 'vertical', 'horizontal'
-        this.moveSpeed = 2;
-        this.moveRange = 50;
-        this.moveOffset = Math.random() * Math.PI * 2;
-    }
-
-    draw() {
-        ctx.save();
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = this.color;
-
-        ctx.fillStyle = this.color;
-        ctx.fillRect(this.x, this.y, this.width, this.height);
-        
-        ctx.strokeStyle = '#00ffff';
-        ctx.lineWidth = 3;
-        ctx.strokeRect(this.x, this.y, this.width, this.height);
-        
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        for(let i=0; i<this.width; i+=20) {
-            ctx.moveTo(this.x + i, this.y);
-            ctx.lineTo(this.x + i + 15, this.y + this.height);
-        }
-        ctx.stroke();
-
-        ctx.restore();
-    }
-
-    update() {
-        // Base scroll speed
-        this.x -= OBSTACLE_SPEED;
-        
-        if (this.moveType === 'vertical') {
-            this.y = this.initialY + Math.sin((frameCount * 0.05) + this.moveOffset) * this.moveRange;
-        } else if (this.moveType === 'horizontal') {
-            // Oscillate X speed relative to OBSTACLE_SPEED
-            // We modify this.x additionally
-            this.x -= Math.sin((frameCount * 0.05) + this.moveOffset) * 3; 
-        }
-    }
-}
-
-// --- Game Functions ---
-function resizeCanvas() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    groundHeight = canvas.height / 3;
-}
-
-window.addEventListener('resize', () => {
-    resizeCanvas();
-    if (player && player.y > canvas.height - groundHeight) {
-        player.y = canvas.height - groundHeight - 100;
-        player.velocityY = 0;
-    }
-});
-
-function init() {
-    resizeCanvas();
-    const floorY = canvas.height - groundHeight;
-    player = new Player(100, floorY - PLAYER_HEIGHT, PLAYER_WIDTH, PLAYER_HEIGHT, PLAYER_COLOR); 
-    gameObjects = [];
-    particles = [];
-    bgParticles = [];
-    score = 0;
-    frameCount = 0;
-    isGameOver = false;
-    nextSpawnFrame = 50; 
-    bgOffset = 0;
-    consecutivePlatforms = 0;
-    bgHue = 240; 
-    lastPlatformY = floorY;
-    gameMode = 'cube'; 
-
-    for(let i=0; i<50; i++) {
-        bgParticles.push(new BgParticle());
-    }
-
-    highScore = parseInt(localStorage.getItem('highScore')) || 0;
-    highScoreEl.textContent = `Best: ${highScore}`;
-    scoreEl.textContent = 'Score: 0';
-    gameOverEl.classList.add('hidden');
-    
-    soundManager.startMusic(); 
-    tryPlayMusic(); 
-
-    gameLoop();
-}
-
-let pointsSincePortal = 0;
-
-function spawnObject() {
-    const floorY = canvas.height - groundHeight;
-    
-    // Portal Spawning Logic
-    if (score > 0 && score % 10 === 0 && pointsSincePortal !== score) {
-        let target = 'cube';
-        if (gameMode === 'cube') target = 'ship';
-        else if (gameMode === 'ship') target = 'ufo'; 
-        else if (gameMode === 'ufo') target = 'wave';
-        else if (gameMode === 'wave') target = 'cube';
-        
-        const portalHeight = 80;
-        const y = floorY - portalHeight; 
-        const x = canvas.width;
-        gameObjects.push(new Portal(x, y, target));
-        
-        // Spawn Spikes above the portal that go to the ceiling
-        const pillarWidth = 30;
-        const pillarHeight = y; 
-        gameObjects.push(new Pillar(x + (50 - pillarWidth)/2, 0, pillarWidth, pillarHeight, '#ff0000'));
-        
-        pointsSincePortal = score;
-        nextSpawnFrame = frameCount + 100; 
-        return;
-    }
-
-    if (gameMode === 'ship' || gameMode === 'ufo' || gameMode === 'wave') {
-        const rand = Math.random();
-        const x = canvas.width;
-        if (rand < 0.25) {
-            gameObjects.push(new Obstacle(x, 0, OBSTACLE_WIDTH, OBSTACLE_HEIGHT, OBSTACLE_COLOR, true));
-        } else if (rand < 0.5) {
-            gameObjects.push(new Obstacle(x, floorY - OBSTACLE_HEIGHT, OBSTACLE_WIDTH, OBSTACLE_HEIGHT, OBSTACLE_COLOR, false));
-        } else if (rand < 0.75) {
-            const height = Math.random() * 150 + 50;
-            if (Math.random() < 0.5) {
-                gameObjects.push(new Pillar(x, 0, 40, height, '#ff0000'));
-            } else {
-                gameObjects.push(new Pillar(x, floorY - height, 40, height, '#ff0000'));
+function update(dt){
+    if(isPaused||isGameOver||!player) return;
+    gameTime+=dt; if(Math.floor(gameTime/60)>score){ score++; const p = Math.min(100, Math.floor(score/levels[currentLevelIndex].duration*100)); document.getElementById('score').textContent=`Progress: ${p}%`; }
+    if(score>=levels[currentLevelIndex].duration){ isLevelComplete=true; isPaused=true; document.getElementById('levelComplete').classList.remove('hidden'); return; }
+    if(gameTime>=nextSpawnTime) spawn();
+    player.update(dt); bgHue=(bgHue+0.1*dt)%360; bgCubes.forEach(c=>c.update(dt));
+    for(let i=gameObjects.length-1;i>=0;i--){
+        const o=gameObjects[i]; o.update(dt);
+        if(!player) break;
+        const hit=(player.x<o.x+(o.width||40) && player.x+player.width>o.x && player.y<o.y+(o.height||60) && player.y+player.height>o.y);
+        if(hit){
+            if(o.type==='portal'){ if(!o.passed){ gameMode=o.targetMode; o.passed=true; sm.play(400,1200,'sine'); } }
+            else if(o.type==='orb'){ 
+                if((jumpPressed || jumpBufferCounter > 0) && !o.used){ 
+                    let f = -PLAYER_JUMP_FORCE; 
+                    if(o.orbType==='red') f *= 1.5; else if(o.orbType==='blue') f *= 1.25;
+                    player.jump(f); o.used=true; jumpBufferCounter = 0; jumpPressed = false;
+                } 
             }
-        } else {
-            const y = Math.random() * (floorY - 200) + 100;
-            gameObjects.push(new Platform(x, y, 60, 60, '#ffaa00'));
+            else if(o.type==='pad'){ player.jump(-PLAYER_JUMP_FORCE * 1.5); }
+            else if(o.type==='platform'){ if(player.y+player.height<=o.y+15 && player.velocityY>=0){ player.y=o.y-player.height; player.velocityY=0; player.onGround=true; } else { die(); } }
+            else if(o.type==='spike'){ die(); }
         }
-        nextSpawnFrame = frameCount + 30; 
-        return;
+        if(o.x+(o.width||40)<0) gameObjects.splice(i,1);
     }
-
-    // CUBE MODE
-    let type = 'random';
-    if (consecutivePlatforms > 0 && consecutivePlatforms < 4) {
-        type = 'platform';
-    } else if (consecutivePlatforms >= 4) {
-        type = 'spike'; 
-        consecutivePlatforms = 0;
-    } else {
-        const r = Math.random();
-        if (r < 0.5) type = 'spike';
-        else if (r < 0.8) type = 'platform';
-        else type = 'pillar'; 
-    }
-
-    let delay = 0;
-
-    if (type === 'pillar') {
-        const x = canvas.width;
-        const height = Math.random() * 60 + 40;
-        gameObjects.push(new Pillar(x, floorY - height, 30, height, '#ff0000'));
-        consecutivePlatforms = 0;
-        delay = Math.floor(Math.random() * 30) + 25;
-    } else if (type === 'spike') {
-        const rCount = Math.random();
-        const count = rCount < 0.6 ? 3 : (rCount < 0.85 ? 2 : 1); 
-        
-        let spacing = OBSTACLE_WIDTH;
-        if (count === 3 && Math.random() < 0.1) {
-            spacing += 10; 
-        }
-
-        for(let i=0; i<count; i++) {
-             const x = canvas.width + (i * spacing); 
-             const y = floorY - OBSTACLE_HEIGHT;
-             gameObjects.push(new Obstacle(x, y, OBSTACLE_WIDTH, OBSTACLE_HEIGHT, OBSTACLE_COLOR));
-        }
-        consecutivePlatforms = 0; 
-        // Increase delay based on spike count to prevent platforms spawning on top (headroom issue)
-        delay = Math.floor(Math.random() * 20) + 30 + (count * 12);
-    } else {
-        const width = Math.floor(Math.random() * (PLATFORM_WIDTH_MAX - PLATFORM_WIDTH_MIN)) + PLATFORM_WIDTH_MIN;
-        let yPos;
-        // Randomize Move Type
-        let moveType = 'none';
-        const r = Math.random();
-        if (r < 0.25) moveType = 'vertical'; // 25% Vertical
-        else if (r < 0.5) moveType = 'horizontal'; // 25% Horizontal
-        
-        if (consecutivePlatforms === 0) {
-             const heightFromGround = Math.floor(Math.random() * 60) + 40; 
-             yPos = floorY - heightFromGround - PLATFORM_HEIGHT;
-        } else {
-             const stepUp = Math.floor(Math.random() * 30) + 20; 
-             yPos = lastPlatformY - stepUp;
-             if (yPos < 100) { 
-                 yPos = floorY - 100 - PLATFORM_HEIGHT; 
-             }
-        }
-        lastPlatformY = yPos;
-        const x = canvas.width;
-        gameObjects.push(new Platform(x, yPos, width, PLATFORM_HEIGHT, PLATFORM_COLOR, moveType));
-        consecutivePlatforms++;
-        
-        if (moveType === 'none' && Math.random() > 0.7 && width > 120) {
-             const spikeX = x + width / 2;
-             const spikeY = yPos - OBSTACLE_HEIGHT;
-             gameObjects.push(new Obstacle(spikeX, spikeY, OBSTACLE_WIDTH, OBSTACLE_HEIGHT, OBSTACLE_COLOR));
-        }
-        delay = Math.floor(Math.random() * 30) + 25;
-    }
-
-    nextSpawnFrame = frameCount + delay;
+    jumpPressed = false;
 }
 
-function checkCollision(player, obj) {
-    const isColliding = (
-        player.x < obj.x + obj.width &&
-        player.x + player.width > obj.x &&
-        player.y < obj.y + obj.height &&
-        player.y + player.height > obj.y
-    );
-
-    if (isColliding) {
-        if (obj.type === 'portal') {
-            if (!obj.passed) {
-                gameMode = obj.targetMode;
-                soundManager.playPortal();
-                player.angle = 0; 
-                obj.passed = true; 
-            }
-            return 'none';
-        }
-        if (obj.type === 'spike') {
-            const margin = 5;
-            if (
-                player.x + margin < obj.x + obj.width - margin &&
-                player.x + player.width - margin > obj.x + margin &&
-                player.y + margin < obj.y + obj.height - margin &&
-                player.y + player.height - margin > obj.y + margin
-            ) {
-                 return 'death';
-            }
-            return 'none';
-        } 
-        if (obj.type === 'platform') {
-            const feetPos = player.y + player.height;
-            const platformBottom = obj.y + obj.height;
-
-            if (feetPos <= platformBottom) { 
-                 if (player.velocityY >= 0) {
-                     return 'land';
-                 } else {
-                     return 'none'; 
-                 }
-            }
-            return 'death';
-        }
-    }
-    return 'none';
+function die(){
+    isGameOver=true; sm.play(800,50,'sawtooth'); 
+    for(let k=0; k<50; k++) { particles.push(new Particle(player.x+25, player.y+25, player.color)); }
+    player=null; document.getElementById('gameOver').classList.remove('hidden'); 
 }
 
-function updateGame() {
-    frameCount++;
-    bgOffset -= 2; 
-    if (bgOffset <= -40) bgOffset = 0;
+function draw(){
+    ctx.fillStyle=`hsl(${bgHue},60%,5%)`; ctx.fillRect(0,0,canvas.width,canvas.height);
+    bgCubes.forEach(c=>c.draw());
+    const f=canvas.height-groundHeight; ctx.fillStyle=`hsl(${bgHue},60%,10%)`; ctx.fillRect(0,f,canvas.width,groundHeight); ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.strokeRect(0,f,canvas.width,2);
+    if(player) player.draw(); gameObjects.forEach(o=>o.draw()); particles.forEach(p=>p.draw());
+}
 
-    bgHue = (bgHue + 0.2) % 360; 
+function loop(t){
+    if(!lastTime) lastTime=t; const dt=Math.min(100,t-lastTime)/16.66; lastTime=t;
+    update(dt); draw(); animationFrameId=requestAnimationFrame(loop);
+}
+
+function startGameLoop(){ if(animationFrameId) cancelAnimationFrame(animationFrameId); animationFrameId=requestAnimationFrame(loop); }
+
+function showLevelMenu() {
+    isPaused = true; 
+    isGameOver = false; // Reset game over state
+    const list = document.getElementById('levelList'); if(!list) return;
     
-    if (jumpBufferCounter > 0) {
-        jumpBufferCounter--;
-    }
+    const menu = document.getElementById('levelMenu');
+    menu.classList.remove('hidden'); // Remove hidden class which has !important
+    menu.style.display = 'flex'; // Use flex to match CSS centering
+    menu.style.zIndex = '2000'; // Ensure it's on top
     
-    if (frameCount >= nextSpawnFrame) {
-        spawnObject();
-    }
-
-    player.update();
-
-    for (let i = particles.length - 1; i >= 0; i--) {
-        particles[i].update();
-        if (particles[i].life <= 0) {
-            particles.splice(i, 1);
-        }
-    }
+    document.getElementById('gameOver').classList.add('hidden');
+    document.getElementById('levelComplete').classList.add('hidden');
     
-    bgParticles.forEach(p => p.update());
-
-    for (let i = gameObjects.length - 1; i >= 0; i--) {
-        const obj = gameObjects[i];
-        obj.update();
-
-        const colStatus = checkCollision(player, obj);
-
-        if (colStatus === 'death') {
-            isGameOver = true;
-            soundManager.playDeath();
-            soundManager.stopMusic();
-            const audio = document.getElementById('bgMusic');
-            if(audio) audio.pause();
-            return;
-        } else if (colStatus === 'land') {
-            player.y = obj.y - player.height;
-            player.velocityY = 0;
-            player.onGround = true;
-            player.coyoteCounter = COYOTE_TIME; 
-             const targetAngle = Math.round(player.angle / (Math.PI / 2)) * (Math.PI / 2);
-             player.angle = targetAngle;
-        }
-
-        if (!obj.passed && obj.x + obj.width < player.x) {
-            score++;
-            scoreEl.textContent = `Score: ${score}`;
-            if (score > highScore) {
-                highScore = score;
-                localStorage.setItem('highScore', highScore);
-                highScoreEl.textContent = `Best: ${highScore}`;
-            }
-            obj.passed = true;
-        }
-
-        if (obj.x + obj.width < 0) {
-            gameObjects.splice(i, 1);
-        }
-    }
+    let h=''; levels.forEach((l, i) => {
+        const saved = parseInt(localStorage.getItem(`highScore_level_${i}`)) || 0; const p = Math.min(100, Math.floor((saved / l.duration) * 100));
+        h+=`<div class="level-card" style="border:2px solid #0ff; margin:10px; padding:15px; cursor:pointer; background:#222; min-width:180px;" onclick="startLevel(${i})">
+            <div style="font-weight:bold; color:#fff;">${l.name}</div><div style="color:gold;">★ ${l.stars}</div>
+            <div style="width:100%; height:8px; background:#333; margin-top:10px;"><div style="width:${p}%; height:100%; background:#0f0;"></div></div></div>`;
+    });
+    list.innerHTML=h;
 }
 
-function drawBackground() {
-    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-    gradient.addColorStop(0, `hsl(${bgHue}, 50%, 10%)`); 
-    gradient.addColorStop(0.5, `hsl(${(bgHue + 40) % 360}, 60%, 20%)`); 
-    gradient.addColorStop(1, `hsl(${(bgHue + 80) % 360}, 50%, 15%)`); 
-    
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    bgParticles.forEach(p => p.draw());
+window.onload=()=>{
+    canvas=document.getElementById('gameCanvas'); ctx=canvas.getContext('2d');
+    resizeCanvas(); showLevelMenu(); startGameLoop();
+};
 
-    ctx.strokeStyle = `hsla(${(bgHue + 180) % 360}, 100%, 50%, 0.15)`;
-    ctx.lineWidth = 1;
-    
-    const gridSize = 40;
-    for (let x = bgOffset; x < canvas.width; x += gridSize) {
-        ctx.beginPath();
-        ctx.moveTo(x, 0);
-        ctx.lineTo(x, canvas.height);
-        ctx.stroke();
-    }
-    for (let y = 0; y < canvas.height; y += gridSize) {
-        ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(canvas.width, y);
-        ctx.stroke();
-    }
-
-    const floorY = canvas.height - groundHeight;
-    ctx.shadowBlur = 30;
-    ctx.shadowColor = `hsl(${bgHue}, 100%, 50%)`;
-    ctx.strokeStyle = `hsl(${bgHue}, 100%, 50%)`;
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.moveTo(0, floorY);
-    ctx.lineTo(canvas.width, floorY);
-    ctx.stroke();
-    ctx.shadowBlur = 0; 
-
-    ctx.fillStyle = `hsl(${bgHue}, 50%, 5%)`;
-    ctx.fillRect(0, floorY, canvas.width, groundHeight);
-}
-
-function drawGame() {
-    drawBackground();
-    player.draw();
-    gameObjects.forEach(obj => obj.draw());
-    particles.forEach(p => p.draw());
-}
-
-function gameLoop() {
-    if (isGameOver) {
-        gameOverEl.classList.remove('hidden');
-        return;
-    }
-
-    updateGame();
-    drawGame();
-
-    requestAnimationFrame(gameLoop);
-}
-
-function tryPlayMusic() {
-    const audio = document.getElementById('bgMusic');
-    if (audio && audio.paused) {
-        audio.currentTime = 0;
-        audio.play().catch(e => console.log("Audio play failed:", e));
-    }
-}
-
-window.addEventListener('keydown', (e) => {
-    soundManager.resume();
-    tryPlayMusic(); 
-    if (e.code === 'Space' || e.code === 'ArrowUp') {
-        jumpBufferCounter = JUMP_BUFFER_TIME; 
-        isHoldingJump = true;
-    }
-});
-
-window.addEventListener('keyup', (e) => {
-    if (e.code === 'Space' || e.code === 'ArrowUp') {
-        isHoldingJump = false;
-    }
-});
-
-canvas.addEventListener('mousedown', () => {
-    soundManager.resume();
-    tryPlayMusic(); 
-    jumpBufferCounter = JUMP_BUFFER_TIME; 
-    isHoldingJump = true;
-});
-
-canvas.addEventListener('mouseup', () => {
-    isHoldingJump = false;
-});
-
-canvas.addEventListener('mouseleave', () => {
-    isHoldingJump = false;
-});
-
-restartBtn.addEventListener('click', () => {
-    soundManager.resume();
-    tryPlayMusic();
-    init();
-});
-
-init();
+window.addEventListener('mousedown', ()=>{jumpPressed=true; isHoldingJump=true; sm.resume();});
+window.addEventListener('mouseup', ()=>{isHoldingJump=false;});
+window.addEventListener('keydown', (e)=>{if(e.code==='Space'||e.code==='ArrowUp'){jumpPressed=true; isHoldingJump=true; sm.resume();}});
+window.addEventListener('keyup', (e)=>{if(e.code==='Space'||e.code==='ArrowUp'){isHoldingJump=false;}});
+document.getElementById('restartBtn').addEventListener('click', ()=>init(currentLevelIndex));
+document.getElementById('menuBtn').addEventListener('click', showLevelMenu);
+document.getElementById('winMenuBtn').addEventListener('click', showLevelMenu);
+document.getElementById('nextLevelBtn').addEventListener('click', ()=>{if(currentLevelIndex<levels.length-1)startLevel(currentLevelIndex+1); else showLevelMenu();});
+document.getElementById('fullscreenBtn').addEventListener('click', toggleFullscreen);
